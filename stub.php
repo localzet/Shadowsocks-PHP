@@ -1,8 +1,8 @@
 <?php
 
 use localzet\Server;
-use localzet\ShadowSocks\App\TCP;
-use localzet\ShadowSocks\App\UDP;
+use localzet\ShadowSocks\Connection\TcpConnection;
+use localzet\ShadowSocks\Connection\UdpConnection;
 use localzet\ShadowSocks\Model\User;
 use MongoDB\Driver\Exception\ConnectionTimeoutException;
 
@@ -49,7 +49,7 @@ try {
 
             'listen' => 'tcp://0.0.0.0:' . $user['port'],
 
-            'handler' => TCP::class,
+            'handler' => TcpConnection::class,
             'constructor' => [$user],
         ]);
 
@@ -63,7 +63,7 @@ try {
 
             'listen' => 'udp://0.0.0.0:' . $user['port'],
 
-            'handler' => UDP::class,
+            'handler' => UdpConnection::class,
             'constructor' => [$user],
         ]);
     }

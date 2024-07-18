@@ -4,12 +4,12 @@ namespace localzet\ShadowSocks;
 
 use localzet\ShadowSocks\Cipher\AEAD\AEADDecipher;
 use localzet\ShadowSocks\Cipher\AEAD\AEADEncipher;
-use localzet\ShadowSocks\Cipher\CFB\CfbDecipher;
-use localzet\ShadowSocks\Cipher\CFB\CfbEncipher;
+use localzet\ShadowSocks\Cipher\CFB\CFBDecipher;
+use localzet\ShadowSocks\Cipher\CFB\CFBEncipher;
 use localzet\ShadowSocks\Cipher\CipherInterface;
-use localzet\ShadowSocks\Cipher\CTREncipher;
+use localzet\ShadowSocks\Cipher\CTR\CTREncipher;
 use localzet\ShadowSocks\Cipher\NoneEncipher;
-use localzet\ShadowSocks\Cipher\RC4Encipher;
+use localzet\ShadowSocks\Cipher\RC4\RC4Encipher;
 use SodiumException;
 
 /**
@@ -205,10 +205,10 @@ class Encryptor
                 default:
                     if ($op === 1) {
                         // Если операция - шифрование, создаем экземпляр CfbEncipher
-                        return new CfbEncipher($method, $key, $iv);
+                        return new CFBEncipher($method, $key, $iv);
                     } else {
                         // Иначе создаем экземпляр CfbDecipher
-                        return new CfbDecipher($method, $key, $iv);
+                        return new CFBDecipher($method, $key, $iv);
                     }
             }
         }

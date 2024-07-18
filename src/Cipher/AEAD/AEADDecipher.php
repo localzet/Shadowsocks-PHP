@@ -8,7 +8,7 @@ use SodiumException;
 /**
  *
  */
-class AEADDecipher extends AEADEncipher implements CipherInterface
+class AEADDecipher extends AbstractAEAD implements CipherInterface
 {
     /**
      * @param string $buffer
@@ -21,7 +21,7 @@ class AEADDecipher extends AEADEncipher implements CipherInterface
         if ($this->_aead_encipher_all) {
             $err = $this->aead_decrypt_all($this->_aead_iv, $this->_aead_subkey, $buffer);
             if ($err == static::CRYPTO_ERROR) {
-                echo "[" . __FILE__ . " " . __LINE__ . "]" . "AEAD decrypt error\n";
+                echo "[" . __FILE__ . " " . __LINE__ . "] Ошибка декодирования AEAD\n";
                 return '';
             }
             return $buffer;
@@ -37,11 +37,11 @@ class AEADDecipher extends AEADEncipher implements CipherInterface
         while (strlen($buffer) > 0) {
             $err = $this->aead_chunk_decrypt($this->_aead_iv, $this->_aead_subkey, $buffer, $result);
             if ($err == static::CRYPTO_ERROR) {
-                echo "[ " . __LINE__ . "]" . "AEAD decrypt error\n";
+                echo "[ " . __LINE__ . "] Ошибка декодирования AEAD\n";
                 return '';
             } else if ($err == static::CRYPTO_NEED_MORE) {
                 if (strlen($buffer) == 0) {
-                    echo "[ " . __LINE__ . "]" . "AEAD decrypt error\n";
+                    echo "[ " . __LINE__ . "] Ошибка декодирования AEAD\n";
                     return '';
                 } else {
                     $this->_aead_tail .= $buffer;
@@ -158,9 +158,9 @@ class AEADDecipher extends AEADEncipher implements CipherInterface
                     return sodium_crypto_aead_chacha20poly1305_ietf_decrypt($msg, $ad, $nonce, $key);
                 case 'xchacha20-ietf-poly1305':
                     return sodium_crypto_aead_xchacha20poly1305_ietf_decrypt($msg, $ad, $nonce, $key);
-                default:
             }
         }
+
         switch ($this->_algorithm) {
             case 'aes-128-gcm':
             case 'aes-192-gcm':
@@ -169,9 +169,9 @@ class AEADDecipher extends AEADEncipher implements CipherInterface
                 $data = substr($msg, 0, $data_len);
                 $tag = substr($msg, $data_len);
                 return openssl_decrypt($data, $this->_algorithm, $key, OPENSSL_RAW_DATA, $nonce, $tag, $ad);
-            default:
-                echo "unsupported encryption algorithm, please enable sodium expansion\n";
-                return '';
         }
+
+        echo "Алгоритм не поддерживается! Пожалуйста, активируйте sodium\n";
+        return '';
     }
 }
