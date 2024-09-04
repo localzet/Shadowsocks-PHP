@@ -6,7 +6,8 @@ use localzet\ShadowSocks\Cipher\CipherInterface;
 use SodiumException;
 
 /**
- *
+ * @author walkor <walkor@workerman.net>
+ * @author Ivan Zorin <creator@localzet.com>
  */
 class AEADEncipher extends AbstractAEAD implements CipherInterface
 {

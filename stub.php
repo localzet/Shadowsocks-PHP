@@ -12,9 +12,35 @@ Phar::mapPhar('ShadowSocks');
 require_once 'phar://ShadowSocks/vendor/autoload.php';
 
 try {
-    error_reporting(E_ALL);
     ini_set('display_errors', 'on');
+    error_reporting(E_ALL);
     date_default_timezone_set("Europe/Moscow");
+
+    $runtimeLogsPath = runtime_path('logs');
+    if (!file_exists($runtimeLogsPath) || !is_dir($runtimeLogsPath)) {
+        if (!mkdir($runtimeLogsPath, 0777, true)) {
+            throw new RuntimeException("Failed to create runtime logs directory. Please check the permission.");
+        }
+    }
+
+    Server::$onMasterReload = function () {
+        if (function_exists('opcache_get_status')) {
+            if ($status = opcache_get_status()) {
+                if (isset($status['scripts']) && $scripts = $status['scripts']) {
+                    foreach (array_keys($scripts) as $file) {
+                        opcache_invalidate($file, true);
+                    }
+                }
+            }
+        }
+    };
+
+    Server::$logFile = runtime_path() . "/master.log";
+    Server::$pidFile = runtime_path() . "/master.pid";
+    Server::$statusFile = runtime_path() . "/master.status";
+    Server::$stdoutFile = runtime_path() . "/master.stdout";
+    Server::$stopTimeout = 2;
+    Server\Connection\TcpConnection::$defaultMaxPackageSize = 10 * 1024 * 1024;
 
     loadDatabase([
         'driver' => 'mongodb',
@@ -40,52 +66,39 @@ try {
     /** @var User $user */
     foreach (User::allActive() as $user) {
         // TCP-Server
-        server_start([
-            'name' => ($user['username'] ? $user['username'] . ' TCP' : 'ShadowSocks TCP'),
-            'count' => cpu_count() * 4,
-
-            'reloadable' => false,
-            'reusePort' => true,
-
-            'listen' => 'tcp://0.0.0.0:' . $user['port'],
-
-            'handler' => TcpConnection::class,
-            'constructor' => [$user],
-        ]);
+        localzet_start(
+            name: $user['username'] ? $user['username'] . ' TCP' : 'ShadowSocks TCP',
+            count: cpu_count() * 4,
+            listen: 'tcp://0.0.0.0:' . $user['port'],
+            reloadable: false,
+            reusePort: true,
+            handler: TcpConnection::class,
+            constructor: [$user],
+            onServerStart: function (?Server $server) {
+                set_error_handler(fn($level, $message, $file = '', $line = 0) => (error_reporting() & $level) ? throw new ErrorException($message, 0, $level, $file, $line) : true);
+                register_shutdown_function(fn($start_time) => (time() - $start_time <= 1) ? sleep(1) : true, time());
+            }
+        );
 
         // UDP-Server
-        server_start([
-            'name' => ($user['username'] ? $user['username'] . ' UDP' : 'ShadowSocks UDP'),
-            'count' => 1,
-
-            'reloadable' => false,
-            'reusePort' => true,
-
-            'listen' => 'udp://0.0.0.0:' . $user['port'],
-
-            'handler' => UdpConnection::class,
-            'constructor' => [$user],
-        ]);
+        localzet_start(
+            name: $user['username'] ? $user['username'] . ' UDP' : 'ShadowSocks UDP',
+            listen: 'udp://0.0.0.0:' . $user['port'],
+            reloadable: false,
+            reusePort: true,
+            transport: 'udp',
+            handler: UdpConnection::class,
+            constructor: [$user],
+            onServerStart: function (?Server $server) {
+                set_error_handler(fn($level, $message, $file = '', $line = 0) => (error_reporting() & $level) ? throw new ErrorException($message, 0, $level, $file, $line) : true);
+                register_shutdown_function(fn($start_time) => (time() - $start_time <= 1) ? sleep(1) : true, time());
+            }
+        );
     }
 
-    Server::$logFile = runtime_path() . "/master.log";
-    Server::$pidFile = runtime_path() . "/master.pid";
-    Server::$statusFile = runtime_path() . "/master.status";
-    Server::$stdoutFile = runtime_path() . "/master.stdout";
-    Server::$onMasterReload = function () {
-        Server::log('$onMasterReload');
-        if (function_exists('opcache_get_status')) {
-            if ($status = opcache_get_status()) {
-                if (isset($status['scripts']) && $scripts = $status['scripts']) {
-                    foreach (array_keys($scripts) as $file) {
-                        opcache_invalidate($file, true);
-                    }
-                }
-            }
-        }
-    };
-
-    Server::runAll();
+    if (!defined('GLOBAL_START')) {
+        Server::runAll();
+    }
 } catch (ConnectionTimeoutException $e) {
     Server::log("База данных недоступна");
 }

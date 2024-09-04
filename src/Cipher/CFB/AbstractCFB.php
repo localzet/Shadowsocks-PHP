@@ -2,6 +2,9 @@
 
 namespace localzet\ShadowSocks\Cipher\CFB;
 
+/**
+ * @author Ivan Zorin <creator@localzet.com>
+ */
 abstract class AbstractCFB
 {
     /**

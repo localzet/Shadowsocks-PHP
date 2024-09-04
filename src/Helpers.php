@@ -26,7 +26,6 @@
 use Illuminate\Container\Container as IlluminateContainer;
 use Illuminate\Database\Capsule\Manager as Capsule;
 use Illuminate\Events\Dispatcher;
-use localzet\Server;
 use localzet\ShadowSocks\Container;
 use Monolog\Logger;
 use Triangle\MongoDB\Connection as MongodbConnection;
@@ -234,89 +233,6 @@ function remove_dir(string $dir): bool
 }
 
 /**
- * @param $server
- * @param $class
- */
-function server_bind($server, $class): void
-{
-    $callbackMap = [
-        'onConnect',
-        'onMessage',
-        'onClose',
-        'onError',
-        'onBufferFull',
-        'onBufferDrain',
-        'onServerStop',
-        'onWebSocketConnect',
-        'onServerReload'
-    ];
-    foreach ($callbackMap as $name) {
-        if (method_exists($class, $name)) {
-            $server->$name = [$class, $name];
-        }
-    }
-    if (method_exists($class, 'onServerStart')) {
-        call_user_func([$class, 'onServerStart'], $server);
-    }
-}
-
-/**
- * @param $config
- * @return Server
- */
-function server_start($config): Server
-{
-    $server = new Server($config['listen'] ?? null, $config['context'] ?? []);
-    $propertyMap = [
-        'name',
-        'count',
-        'user',
-        'group',
-        'reloadable',
-        'reusePort',
-        'transport',
-        'protocol',
-    ];
-    foreach ($propertyMap as $property) {
-        if (isset($config[$property])) {
-            $server->$property = $config[$property];
-        }
-    }
-
-    $server->onServerStart = function ($server) use ($config) {
-        set_error_handler(
-            function ($level, $message, $file = '', $line = 0) {
-                if (error_reporting() & $level) {
-                    throw new ErrorException($message, 0, $level, $file, $line);
-                }
-            }
-        );
-
-        register_shutdown_function(
-            function ($start_time) {
-                if (time() - $start_time <= 1) {
-                    sleep(1);
-                }
-            },
-            time()
-        );
-
-        if (isset($config['handler'])) {
-            if (!class_exists($config['handler'])) {
-                echo "process error: class {$config['handler']} not exists\r\n";
-                return;
-            }
-
-            $instance = Container::make($config['handler'], $config['constructor'] ?? []);
-            server_bind($server, $instance);
-        }
-    };
-
-    return $server;
-}
-
-
-/**
  * @return bool
  */
 function is_phar(): bool
@@ -325,135 +241,14 @@ function is_phar(): bool
 }
 
 /**
- * @return int
- */
-function cpu_count(): int
-{
-    // Винда опять не поддерживает это
-    if (DIRECTORY_SEPARATOR === '\\') {
-        return 1;
-    }
-    $count = 4;
-    if (is_callable('shell_exec')) {
-        if (strtolower(PHP_OS) === 'darwin') {
-            $count = (int)shell_exec('sysctl -n machdep.cpu.core_count');
-        } else {
-            $count = (int)shell_exec('nproc');
-        }
-    }
-    return $count > 0 ? $count : 4;
-}
-
-/**
- * Валидация IP-адреса
- *
- * @param string $ip IP-адрес
- *
- * @return boolean
- */
-function validateIp(string $ip): bool
-{
-    if (strtolower($ip) === 'unknown')
-        return false;
-    $ip = ip2long($ip);
-    if ($ip !== false && $ip !== -1) {
-        $ip = sprintf('%u', $ip);
-        if ($ip >= 0 && $ip <= 50331647)
-            return false;
-        if ($ip >= 167772160 && $ip <= 184549375)
-            return false;
-        if ($ip >= 2130706432 && $ip <= 2147483647)
-            return false;
-        if ($ip >= 2851995648 && $ip <= 2852061183)
-            return false;
-        if ($ip >= 2886729728 && $ip <= 2887778303)
-            return false;
-        if ($ip >= 3221225984 && $ip <= 3221226239)
-            return false;
-        if ($ip >= 3232235520 && $ip <= 3232301055)
-            return false;
-        if ($ip >= 4294967040)
-            return false;
-    }
-    return true;
-}
-
-/**
- * @param string $ip
- * @return bool
- */
-function isIntranetIp(string $ip): bool
-{
-    // Не IP.
-    if (!filter_var($ip, FILTER_VALIDATE_IP)) {
-        return false;
-    }
-    // Точно ip Интранета? Для IPv4 FALSE может быть не точным, поэтому нам нужно проверить его вручную ниже.
-    if (!filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE)) {
-        return true;
-    }
-    // Ручная проверка IPv4.
-    if (!filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)) {
-        return false;
-    }
-
-    // Ручная проверка
-    // $reservedIps = [
-    //     '167772160'  => 184549375,  // 10.0.0.0 -  10.255.255.255
-    //     '3232235520' => 3232301055, // 192.168.0.0 - 192.168.255.255
-    //     '2130706432' => 2147483647, // 127.0.0.0 - 127.255.255.255
-    //     '2886729728' => 2887778303, // 172.16.0.0 -  172.31.255.255
-    // ];
-    $reservedIps = [
-        1681915904 => 1686110207,   // 100.64.0.0 -  100.127.255.255
-        3221225472 => 3221225727,   // 192.0.0.0 - 192.0.0.255
-        3221225984 => 3221226239,   // 192.0.2.0 - 192.0.2.255
-        3227017984 => 3227018239,   // 192.88.99.0 - 192.88.99.255
-        3323068416 => 3323199487,   // 198.18.0.0 - 198.19.255.255
-        3325256704 => 3325256959,   // 198.51.100.0 - 198.51.100.255
-        3405803776 => 3405804031,   // 203.0.113.0 - 203.0.113.255
-        3758096384 => 4026531839,   // 224.0.0.0 - 239.255.255.255
-    ];
-
-    $ipLong = ip2long($ip);
-
-    foreach ($reservedIps as $ipStart => $ipEnd) {
-        if (($ipLong >= $ipStart) && ($ipLong <= $ipEnd)) {
-            return true;
-        }
-    }
-    return false;
-}
-
-/**
- * Генерация ID
- *
- * @return string
- */
-function generateId(): string
-{
-    return sprintf(
-        '%04x%04x-%04x-%04x-%04x-%04x%04x%04x',
-        mt_rand(0, 0xffff),
-        mt_rand(0, 0xffff),
-        mt_rand(0, 0xffff),
-        mt_rand(0, 0x0fff) | 0x4000,
-        mt_rand(0, 0x3fff) | 0x8000,
-        mt_rand(0, 0xffff),
-        mt_rand(0, 0xffff),
-        mt_rand(0, 0xffff)
-    );
-}
-
-/**
- * 解析shadowsocks客户端发来的socket5头部数据
- * @param string $buffer
- * @return array|false
+ * Анализирует данные заголовка socket5, отправленные клиентом shadowsocks
+ * @param string $buffer Буфер для анализа
+ * @return array|false Возвращает массив с данными заголовка или false в случае ошибки
  */
 function parse_socket5_header(string $buffer): false|array
 {
     /*
-     * Shadowsocks TCP Relay Header:
+     * Заголовок TCP Relay Shadowsocks:
      *
      *    +------+----------+----------+
      *    | ATYP | DST.ADDR | DST.PORT |
@@ -462,17 +257,18 @@ function parse_socket5_header(string $buffer): false|array
      *    +------+----------+----------+
      *
      */
-    //检查长度
+
     if (strlen($buffer) < 1) {
-        echo "invalid length for header\n";
+        echo "Недопустимая длина для заголовка\n";
         return false;
     }
+
     $addr_type = ord($buffer[0]);
     switch ($addr_type) {
         case ADDRTYPE_IPV4:
             $header_length = 7;
             if (strlen($buffer) < $header_length) {
-                echo "invalid length for ipv4 address\n";
+                echo "Недопустимая длина для ipv4 адреса\n";
                 return false;
             }
             $dest_addr = ord($buffer[1]) . '.' . ord($buffer[2]) . '.' . ord($buffer[3]) . '.' . ord($buffer[4]);
@@ -481,13 +277,13 @@ function parse_socket5_header(string $buffer): false|array
             break;
         case ADDRTYPE_HOST:
             if (strlen($buffer) < 2) {
-                echo "invalid length host name length\n";
+                echo "Недопустимая длина имени хоста\n";
                 return false;
             }
             $addrlen = ord($buffer[1]);
             $header_length = $addrlen + 4;
             if (strlen($buffer) < $header_length) {
-                echo "invalid host name length\n";
+                echo "Недопустимая длина имени хоста\n";
                 return false;
             }
             $dest_addr = substr($buffer, 2, $addrlen);
@@ -496,10 +292,10 @@ function parse_socket5_header(string $buffer): false|array
             break;
         case ADDRTYPE_IPV6:
             // todo ...
-            // ipv6 not support yet ...
+            // ipv6 пока не поддерживается ...
             $header_length = 19;
             if (strlen($buffer) < $header_length) {
-                echo "invalid length for ipv6 address\n";
+                echo "Недопустимая длина для ipv6 адреса\n";
                 return false;
             }
             $dest_addr = inet_ntop(substr($buffer, 1, 16));
@@ -507,36 +303,30 @@ function parse_socket5_header(string $buffer): false|array
             $dest_port = $port_data[1];
             break;
         default:
-            echo "unsupported addrtype $addr_type\n";
+            echo "Неподдерживаемый тип адреса $addr_type\n";
             return false;
     }
     return array($addr_type, $dest_addr, $dest_port, $header_length);
 }
 
-/*
- UDP 部分 返回客户端 头部数据 by @Zac
- //生成UDP header 它这里给返回解析出来的域名貌似给udp dns域名解析用的
-*/
 /**
- * @param $addr
- * @param $addr_type
- * @param $port
- * @return string|void
+ * Создает UDP-заголовок для ответа клиенту
+ * @param string $addr Адрес
+ * @param int $addr_type Тип адреса
+ * @param int $port Порт
+ * @return string|void Возвращает заголовок или ничего
  */
 function pack_header($addr, $addr_type, $port)
 {
-    $header = '';
-    //$ip = pack('N',ip2long($addr));
-    //判断是否是合法的公共IPv4地址，192.168.1.1这类的私有IP地址将会排除在外
-    /*
-     if(filter_var($addr, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4 | FILTER_FLAG_NO_PRIV_RANGE)) {
-     // it's valid
-     $addr_type = ADDRTYPE_IPV4;
-     //判断是否是合法的IPv6地址
-     }elseif(filter_var($addr, FILTER_VALIDATE_IP, FILTER_FLAG_NO_RES_RANGE)){
-     $addr_type = ADDRTYPE_IPV6;
-     }
-     */
+    // Проверка, является ли адрес действительным общедоступным IPv4-адресом
+    if(filter_var($addr, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4 | FILTER_FLAG_NO_PRIV_RANGE)) {
+        $addr_type = ADDRTYPE_IPV4;
+    }
+    // Проверка, является ли адрес действительным IPv6-адресом
+    elseif(filter_var($addr, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6 | FILTER_FLAG_NO_RES_RANGE)){
+        $addr_type = ADDRTYPE_IPV6;
+    }
+
     switch ($addr_type) {
         case ADDRTYPE_IPV4:
             $header = b"\x01" . inet_pton($addr);

@@ -2,6 +2,9 @@
 
 namespace localzet\ShadowSocks\Cipher\AEAD;
 
+/**
+ * @author Ivan Zorin <creator@localzet.com>
+ */
 class AbstractAEAD
 {
     /**

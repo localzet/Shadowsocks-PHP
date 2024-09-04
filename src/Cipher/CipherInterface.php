@@ -3,7 +3,8 @@
 namespace localzet\ShadowSocks\Cipher;
 
 /**
- *
+ * @author walkor <walkor@workerman.net>
+ * @author Ivan Zorin <creator@localzet.com>
  */
 interface CipherInterface
 {

@@ -5,7 +5,8 @@ namespace localzet\ShadowSocks\Cipher\RC4;
 use localzet\ShadowSocks\Cipher\CipherInterface;
 
 /**
- *
+ * @author walkor <walkor@workerman.net>
+ * @author Ivan Zorin <creator@localzet.com>
  */
 class RC4Encipher implements CipherInterface
 {

@@ -5,7 +5,8 @@ namespace localzet\ShadowSocks\Cipher\CFB;
 use localzet\ShadowSocks\Cipher\CipherInterface;
 
 /**
- *
+ * @author walkor <walkor@workerman.net>
+ * @author Ivan Zorin <creator@localzet.com>
  */
 class CFBEncipher extends AbstractCFB implements CipherInterface
 {
